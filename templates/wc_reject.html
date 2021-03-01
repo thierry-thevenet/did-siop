@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  {% include 'oauth_head.html' %}
+
+</head>
+<body id="page-top" onload="page_onload()" >
+  <div id="wrapper">
+    <div class="d-flex flex-column" id="content-wrapper">
+      <div id="content">
+        <div class="container">
+          <div class="row justify-content-center">
+            <div class="col-md-9 col-lg-10 col-xl-8">
+              <div class="card shadow o-hidden border-0 my-5" style="color: rgb(133,135,150);">
+                <div class="card-body p-0">
+                  <div class="col">
+                    <div  class="p-5">
+                        <div class='text-center'><h4 class='text-dark mb-4'>Connect with your Wallet</h4>
+                       <div>
+                         <div id="connected" hidden><</div>
+                            Your wallet account in unknown, no Identiy found.
+                            <br><br>
+                            <div class="text-center"><a class="small" onclick="Register()" href="#" >Register a new Digital Identity</a></div>
+                            <div class="text-center"><a class="small" onclick="End_1()" href="#" >Change wallet account</a></div>
+                            <div class="text-center"><a class="small" onclick="End_2()" href="#" >Log with password</a></div>
+
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="{{ url_for('static', filename='jquery-3.5.1.slim.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='bs-init.js') }}"></script>
+  <script src="{{ url_for('static', filename='bootstrap.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='wc-talao.min.js') }}"></script>
+
+
+
+  <script> function End_1() {
+    window.onEnd();
+    window.location.href = "/api/v1/oauth_login";
+  }
+  </script>
+  <script> function End_2() {
+    window.onEnd();
+    window.location.href = "/api/v1/oauth_wc_login/?reject=on";
+  }
+  </script>
+
+
+<script>
+function page_onload(){
+  window.getAccountAddress().then(value => {
+    console.log('value = ', value);
+    });
+}
+</script>
+
+
+<script> function Register() {
+  window.onEnd();
+  window.location.href = "https://talao.co/wc_register/?wallet_address=" + "{{wallet_address}}";
+}
+</script>
+
+</body>
+</html>
