@@ -17,26 +17,31 @@ from flask import Flask, redirect
 from flask_session import Session
 #from flask_fontawesome import FontAwesome
 from datetime import timedelta
+import logging
 
 import models
 import oauth2
 
-from routes import web_oauth_did, web_resolver
+from routes import web_oauth_did
+#from routes import web_resolver
 from erc725 import oidc_environment
+
+logging.basicConfig(level=logging.INFO)
+
 
 # Environment variables set in gunicornconf.py  and transfered to environment.py
 mychain = os.getenv('MYCHAIN')
 myenv = os.getenv('MYENV')
 if not mychain or not myenv :
-    print('Error : environment variables missing')
-    print('Error : export MYCHAIN=talaonet, export MYENV=livebox, export AUTHLIB_INSECURE_TRANSPORT=1')
+    logging.error('environment variables missing')
+    logging.error('export MYCHAIN=talaonet, export MYENV=livebox, export AUTHLIB_INSECURE_TRANSPORT=1')
     exit()
 if mychain not in ['mainet', 'ethereum', 'rinkeby', 'talaonet'] :
-    print('Error : wrong chain')
+    logging.error('wrong chain')
     exit()
-print('Success : start to init environment')
+logging.info('start to init environment')
 mode = oidc_environment.currentMode(mychain,myenv)
-print('Success : end of init')
+logging.info('end of init environment')
 
 # OIDC DID server Release
 VERSION = "0.0.1"
@@ -62,7 +67,7 @@ sess.init_app(app)
 # note that we set the 403 status explicitly
 @app.errorhandler(403)
 def page_abort(e):
-    print('Warning : appel abort 403')
+    logging.warning('appel abort 403')
     return redirect(mode.server + 'login/')
 
 # Centralized @route for create identity
@@ -91,7 +96,7 @@ oauth2.config_oauth(app)
 # FLASK ROUTES
 
 # Resolver
-app.add_url_rule('/resolver', view_func=web_resolver.resolver, methods = ['GET', 'POST'], defaults ={'mode' : mode})
+#app.add_url_rule('/resolver', view_func=web_resolver.resolver, methods = ['GET', 'POST'], defaults ={'mode' : mode})
 
 # Create credentials
 app.add_url_rule('/api/v1', view_func=web_oauth_did.home, methods = ['GET', 'POST'], defaults ={'mode' : mode})
@@ -121,7 +126,7 @@ app.add_url_rule('/api/v1/help', view_func=web_oauth_did.send_help)
 if __name__ == '__main__':
 
     # info release
-    print('Info : ',__file__, " created: %s" % time.ctime(os.path.getctime(__file__)))
-    print('Warning : flask serveur init')
+    logging.info("created: %s", time.ctime(os.path.getctime(__file__)))
+    logging.info('flask serveur on production now')
 
     app.run(host = mode.flaskserver, port= mode.port, debug = mode.test)

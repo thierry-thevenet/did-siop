@@ -18,6 +18,7 @@ import json
 from urllib.parse import urlencode, parse_qs, urlparse, parse_qsl
 from urllib import parse
 from datetime import datetime, timedelta
+import logging
 #from eth_account.messages import defunct_hash_message
 #from eth_account.messages import encode_defunct
 from eth_account import Account
@@ -30,13 +31,14 @@ import ns
 import talao_ipfs
 from erc725 import protocol
 
+logging.basicConfig(level=logging.INFO)
 
 def check_login() :
     """
     check if the user is correctly logged. This function is called everytime a user function is called from Talao website
     """
     if not session.get('username') and not session.get('workspace_contract') :
-        print('Warning : call abort 403')
+        logging.error('call abort 403')
         abort(403)
     else :
         return session['username']
@@ -83,7 +85,6 @@ def get_user_workspace(user_id, mode):
     return user.username
 
 
-
 def send_help():
     """
     @app.route('/api/v1/help/')
@@ -91,8 +92,6 @@ def send_help():
     """
     filename = request.args['file']
     return render_template(filename)
-
-
 
 
 def home(mode):
@@ -126,9 +125,8 @@ def home(mode):
 def oauth_logout():
     post_logout = request.args.get('post_logout_redirect_uri')
     session.clear()
-    print('Warning : logout ID provider')
+    logging.info('logout ID provider')
     return redirect(post_logout)
-
 
 
 def oauth_login(mode):
@@ -139,6 +137,7 @@ def oauth_login(mode):
     """
     if not session.get('url') :
         session['url'] = request.args.get('next')
+        print('next = ', session['url'])
     return render_template('login_qrcode.html')
 
 
@@ -174,8 +173,8 @@ def oauth_wc_login(mode) :
         wallet_address = mode.w3.toChecksumAddress(wallet_address)
 
         # check if wallet address is an owner, one rejects alias wallet here
-        print("Info : Wallet is an owner of  = ", protocol.ownersToContracts(wallet_address, mode))
-        print('Info : Wallet is an alias of = ', ns.get_username_from_wallet(wallet_address, mode))
+        logging.info("Wallet is an owner of  = %s", protocol.ownersToContracts(wallet_address, mode))
+        logging.info('Info : Wallet is an alias of = %s', ns.get_username_from_wallet(wallet_address, mode))
         identity = protocol.ownersToContracts(wallet_address, mode)
         if not identity or identity == '0x0000000000000000000000000000000000000000' :
             return render_template('wc_reject.html', wallet_address=wallet_address)
@@ -260,14 +259,16 @@ def authorize(mode):
     """
     # to manage wrong login ot user rejection, qr code exit
     if 'reject' in request.args :
+        logging.warning('reject in authorize')
         session.clear()
         return oauth2.authorization.create_authorization_response(grant_user=None)
+
+    # get client Identity from API credentials
     user = current_user()
     client_id = request.args.get('client_id')
     client = OAuth2Client.query.filter_by(client_id=client_id).first()
-    client_username = json.loads(client._client_metadata)['client_name']
-    client_workspace_contract = ns.get_data_from_username(client_username, mode).get('workspace_contract')
-    category = protocol.get_category(client_workspace_contract, mode)
+    client_workspace_contract = get_client_workspace(client_id, mode)
+
     # if user not logged (Auth server), then to log it in
     if not user :
         return redirect(url_for('oauth_login', next=request.url))
@@ -277,15 +278,14 @@ def authorize(mode):
         try:
             grant = oauth2.authorization.validate_consent_request(end_user=user)
         except OAuth2Error as error:
-            return error.error
+            logging.error('OAuth2Error')
+            return jsonify(dict(error.get_body()))
+            #return error.error
 
         # configure consent screen : oauth_authorize.html
-        consent_screen_scopes = ['openid', 'user:manage:referent', 'user:manage:partner', 'user:manage:certificate', 'user:manage:data']
+        consent_screen_scopes = ['openid', 'address', 'profile', 'about', 'birthdate', 'resume', 'proof_of_identity', 'email', 'phone']
         user_workspace_contract = user.username
-        category = protocol.get_category(user_workspace_contract, mode)
-        if category == 1001 : # person
-            consent_screen_scopes.extend(['address', 'profile', 'about', 'birthdate', 'resume', 'proof_of_identity', 'email', 'phone'])
-        checkbox = {key.replace(':', '_') : 'checked' if key in grant.request.scope and key in client.scope.split() else ""  for key in consent_screen_scopes}
+        checkbox = {key.replace(':', '_') : 'checked' if key in grant.request.scope.split() and key in client.scope.split() else ""  for key in consent_screen_scopes}
 
         # Display consent view to ask for user consent if scope is more than just openid
         return render_template('authorize.html',
@@ -304,6 +304,7 @@ def authorize(mode):
         user = User.query.filter_by(username=user_workspace_contract).first()
     if 'reject' in request.form :
         session.clear()
+        logging.info('reject')
         return oauth2.authorization.create_authorization_response(grant_user=None,)
     # update scopes after user consent
     query_dict = parse_qs(request.query_string.decode("utf-8"))
@@ -328,7 +329,7 @@ def user_info(mode):
     user_info = dict()
     profile, category = protocol.read_profil(user_workspace_contract, mode, 'full')
     user_info['sub'] = 'did:talao:' + mode.BLOCKCHAIN +':' + user_workspace_contract[2:]
-    print('Warning : token scope received = ', current_token.scope)
+    logging.info('token scope received = %s', current_token.scope)
     if 'proof_of_identity' in current_token.scope :
         user_info['proof_of_identity'] = 'Not implemented yet'
     if category == 1001 : # person
@@ -345,7 +346,7 @@ def user_info(mode):
             print('user wokspace contract dans appel de resume = ', user_workspace_contract)
             user_info['resume'] = get_resume(user_workspace_contract, mode)
     if category == 2001 : # company
-        print('Error : OIDC request for company')
+        logging.warning('OIDC request for company')
     # setup response
     response = Response(json.dumps(user_info), status=200, mimetype='application/json')
     return response
