@@ -11,12 +11,15 @@ from web3.middleware import geth_poa_middleware
 from web3 import Web3
 import json
 import sys
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 class currentMode() :
 
 	def __init__(self, mychain, myenv):
 		# mychain, myenv --> environment variables set in gunicornconf.py or manually if main.py is launched without Gunicorn
-		print(mychain, myenv)
+		logging.info('environment variables are %s %s' , mychain, myenv)
 		# currently mychain=talaonet
 		mychain = 'talaonet'
 		if myenv == 'aws':
@@ -81,7 +84,7 @@ class currentMode() :
 			self.port = 8000
 
 		else :
-			print('Error : environment variable problem')
+			logging.error('environment variable problem')
 
 		self.start_block = 10000
 		self.GASPRICE='2'
@@ -106,10 +109,10 @@ class currentMode() :
 		self.workspace_contract_talao = '0x4562DB03D8b84C5B10FfCDBa6a7A509FF0Cdcc68'
 
 		if self.w3.isConnected()== False :
-			print('Error : not Connected, network problem')
+			logging.error('not Connected, network problem')
 			sys.exit()
 		else :
-			print('Success : connected to ' + self.BLOCKCHAIN)
+			logging.info('connected to %s', self.BLOCKCHAIN)
 
 		""" unlock main account for IPC node only...
 		Faire >>>personal.importRawKey(relay, "password") avec address sans '0x' et correct password """

@@ -152,7 +152,10 @@
     document.getElementById("id_button").innerHTML = '';
     document.getElementById("id_button_reject").innerHTML = ''
 
-    document.getElementById("id_text").innerHTML = 'Waiting for wallet signature to access Digital Identity on blockchain...';
+    document.getElementById("id_text").innerHTML = 'Waiting for wallet to access Digital Identity...';
+    /*
+    In this option we send back the private key encrypted with teh rsa key of the client 
+    */
     const result = await window.getAesEncrypted('{{workspace_contract_to}}');
     console.log('result = ', result);
     const message = JSON.stringify({'aesEncrypted' : result[0], 'workspace_contract' : result[1]})

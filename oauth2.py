@@ -48,7 +48,7 @@ private_rsa_key = protocol.get_rsa_key(mode.owner_talao, mode)
 # Generate JWK from rsa key
 JWK = jwk.dumps(private_rsa_key)
 
-# set up 'kid' in the JWK header 
+# set up 'kid' in the JWK header
 JWK['kid'] = "Talao RSA Key"
 
 JWT_CONFIG = {

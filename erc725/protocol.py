@@ -9,6 +9,10 @@ from datetime import datetime
 from eth_account.messages import encode_defunct
 import random
 from eth_account import Account
+import os
+
+import logging
+logging.basicConfig(level=logging.INFO)
 
 
 # dependances
@@ -62,6 +66,7 @@ def read_profil (workspace_contract, mode, loading) :
 	try :
 		category = contract.functions.identityInformation().call()[1]
 	except :
+		logging.error('get IdentityInformation failed')
 		return None, None
 	topic_dict = person_topicnames if category == 1001 else company_topicnames
 
@@ -85,18 +90,19 @@ def get_category (workspace_contract, mode) :
 	try :
 		category = contract.functions.identityInformation().call()[1]
 	except :
-		print('Error : identity does not exist')
+		logging.error('identity does not exist')
 		return None
 	return category
 
 
 def get_private_key(address, mode) :
 	if not mode.w3.isAddress(address) or address == '0x0000000000000000000000000000000000000000' :
+		logging.error('wrong address')
 		return None
 	try :
 		fp = open(mode.keystore_path + address[2:] + '.json', "r")
 	except :
-		print('Error : private key not found in privatekey.py')
+		logging.error('private key not found in privatekey.py')
 		return None
 	encrypted = fp.read()
 	fp.close()
@@ -105,6 +111,7 @@ def get_private_key(address, mode) :
 
 def get_rsa_key(address, mode) :
 	if not mode.w3.isAddress(address) or address == '0x0000000000000000000000000000000000000000' :
+		logging.error('wrong address')
 		return None
 	# first we try to find a the new rsa file with .pem
 	workspace_contract = ownersToContracts(address, mode)
@@ -113,46 +120,48 @@ def get_rsa_key(address, mode) :
 	try :
 		fp_new = open(new_filename,"r")
 	except IOError :
-		print('Warning : new RSA file (.pem) not found on disk')
+		logging.warning('new RSA file (.pem) not found on disk')
 		try :
 			fp_prev = open(previous_filename,"r")
 		except IOError :
-			print('Warning : old RSA file not found on disk ')
+			logging.warning('old RSA file not found on disk ')
 			rsa_key  = None
 		else :
 			rsa_key = fp_prev.read()
 			fp_prev.close()
 			os.rename(previous_filename, new_filename)
-			print('Warning : old RSA file renamed')
+			logging.warning('RSA file renamed')
 	else :
 		rsa_key = fp_new.read()
 		fp_new.close()
-		print('Success : new RSA file found')
+		logging.info('new RSA file found')
 	return rsa_key
 
 def contractsToOwners(workspace_contract, mode) :
 	if not workspace_contract :
+		logging.error('wrong workspace_contract address')
 		return None
 	if workspace_contract == '0x0000000000000000000000000000000000000000' :
-		print('Warning : contracts to owners return 0x')
+		logging.warning('contracts to owners return 0x...')
 		return workspace_contract
 	contract = mode.w3.eth.contract(mode.foundation_contract,abi=constante.foundation_ABI)
 	address = contract.functions.contractsToOwners(workspace_contract).call()
 	if address == '0x0000000000000000000000000000000000000000' :
+		logging.error('wrong address')
 		return None
 	return address
 
 def ownersToContracts(address, mode) :
 	if not address :
-		print('Warning : owners to contracts : its not an address')
+		logging.warning('owners to contracts : its not an address')
 		return None
 	if address == '0x0000000000000000000000000000000000000000' :
-		print('Warning : owners to contract : return 0x')
+		logging.warning('owners to contract : return 0x...')
 		return address
 	contract = mode.w3.eth.contract(mode.foundation_contract,abi=constante.foundation_ABI)
 	workspace_address = contract.functions.ownersToContracts(address).call()
 	if workspace_address == '0x0000000000000000000000000000000000000000' :
-		print('Warning : owners to contract : return 0x')
+		logging.warning('owners to contract : return 0x...')
 	return workspace_address
 
 
@@ -176,6 +185,7 @@ def createVaultAccess(address,private_key,mode) :
 	receipt = w3.eth.waitForTransactionReceipt(hash, timeout=2000, poll_latency=1)
 	if not receipt['status'] :
 		return None
+		logging.error('transaction createvaut access failed')
 	return hash
 
 def createWorkspace(address,private_key,bRSAPublicKey,bAESEncryptedKey,bsecret,bemail,mode, user_type=1001) :
@@ -192,6 +202,7 @@ def createWorkspace(address,private_key,bRSAPublicKey,bAESEncryptedKey,bsecret,b
 	hash= w3.toHex(w3.keccak(signed_txn.rawTransaction))
 	receipt = w3.eth.waitForTransactionReceipt(hash, timeout=2000, poll_latency=1)
 	if not receipt['status'] :
+		logging.error('transaction createworkspace failed')
 		return None
 	return hash
 
@@ -229,6 +240,7 @@ def update_self_claims(address, private_key, dict, mode) :
 	hash1= w3.toHex(w3.keccak(signed_txn.rawTransaction))
 	receipt = w3.eth.waitForTransactionReceipt(hash1, timeout=2000, poll_latency=1)
 	if receipt['status'] == 0 :
+		logging.error('transaction update self claims failed')
 		return None
 	return hash1
 
