@@ -15,15 +15,12 @@ import os
 import time
 from flask import Flask, redirect
 from flask_session import Session
-#from flask_fontawesome import FontAwesome
 from datetime import timedelta
 import logging
 
 import models
 import oauth2
-
 from routes import web_oauth_did
-#from routes import web_resolver
 from erc725 import oidc_environment
 
 logging.basicConfig(level=logging.INFO)
@@ -57,26 +54,14 @@ app.config['SESSION_TYPE'] = 'redis' # Redis server side session
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=180) # cookie lifetime
 app.config['SESSION_FILE_THRESHOLD'] = 100
 app.config['SECRET_KEY'] = "test_OIDC_DID" + mode.password
-#app.config["ALLOWED_IMAGE_EXTENSIONS"] = ["jpeg", "jpg", "png", "gif"]
 sess = Session()
 sess.init_app(app)
-
-# bootstrap font managment  -> recheck if needed !!!!!
-#fa = FontAwesome(app)
 
 # note that we set the 403 status explicitly
 @app.errorhandler(403)
 def page_abort(e):
     logging.warning('appel abort 403')
     return redirect(mode.server + 'login/')
-
-# Centralized @route for create identity
-#app.add_url_rule('/register/',  view_func=web_create_identity.register, methods = ['GET', 'POST'], defaults={'mode': mode})
-#app.add_url_rule('/register/password/',  view_func=web_create_identity.register_password, methods = [ 'GET', 'POST'], defaults={'mode': mode})
-#app.add_url_rule('/register/code/', view_func=web_create_identity.register_code, methods = ['GET', 'POST'], defaults={'mode': mode})
-#app.add_url_rule('/register/post_code/', view_func=web_create_identity.register_post_code, methods = ['POST', 'GET'], defaults={'mode': mode})
-#app.add_url_rule('/wc_register/',  view_func=web_create_identity.wc_register, methods = ['GET', 'POST'], defaults={'mode': mode})
-#app.add_url_rule('/wc_register_activate/',  view_func=web_create_identity.wc_register_activate, methods = ['GET', 'POST'], defaults={'mode': mode})
 
 oauth_config = {
     'OAUTH2_REFRESH_TOKEN_GENERATOR': False,
@@ -94,9 +79,6 @@ models.db.init_app(app)
 oauth2.config_oauth(app)
 
 # FLASK ROUTES
-
-# Resolver
-#app.add_url_rule('/resolver', view_func=web_resolver.resolver, methods = ['GET', 'POST'], defaults ={'mode' : mode})
 
 # Create credentials
 app.add_url_rule('/api/v1', view_func=web_oauth_did.home, methods = ['GET', 'POST'], defaults ={'mode' : mode})

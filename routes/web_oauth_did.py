@@ -13,25 +13,34 @@ from flask import render_template, redirect, jsonify
 from werkzeug.security import gen_salt
 from authlib.integrations.flask_oauth2 import current_token, client_authenticated
 from authlib.oauth2 import OAuth2Error, OAuth2Request
-from models import db, User, OAuth2Client
 import json
 from urllib.parse import urlencode, parse_qs, urlparse, parse_qsl
 from urllib import parse
 from datetime import datetime, timedelta
 import logging
-#from eth_account.messages import defunct_hash_message
-#from eth_account.messages import encode_defunct
 from eth_account import Account
 from eth_keys import keys
-#from eth_utils import decode_hex
+import base64
 
 import constante
-import oauth2
-import ns
-import talao_ipfs
+import oauth2, ns, talao_ipfs
+from models import db, User, OAuth2Client
 from erc725 import protocol
 
 logging.basicConfig(level=logging.INFO)
+
+def dict_to_b64(mydict) : 
+    token_str = json.dumps(mydict)
+    token_bytes = token_str.encode()
+    token_b64 = base64.b64encode(token_bytes)
+    token = token_b64.decode()
+    return token
+
+def b64_to_dict(myb64) :
+    rtoken_b64 = myb64.encode()
+    rtoken_bytes = base64.b64decode(rtoken_b64)
+    rtoken_str = rtoken_bytes.decode()
+    return json.loads(rtoken_str)
 
 def check_login() :
     """
@@ -42,7 +51,6 @@ def check_login() :
         abort(403)
     else :
         return session['username']
-
 
 # To be rework
 def get_resume (workspace_contract, mode) :
@@ -271,6 +279,7 @@ def authorize(mode):
 
     # if user not logged (Auth server), then to log it in
     if not user :
+        logging.info('user not registered')
         return redirect(url_for('oauth_login', next=request.url))
 
     # if user is already logged we prepare the "OIDC consent screen"
@@ -283,29 +292,36 @@ def authorize(mode):
             #return error.error
 
         # configure consent screen : oauth_authorize.html
-        consent_screen_scopes = ['openid', 'address', 'profile', 'about', 'birthdate', 'resume', 'proof_of_identity', 'email', 'phone']
-        user_workspace_contract = user.username
+        consent_screen_scopes = ['openid', 'address', 'profile', 'about', 'birthdate', 'resume', 'proof_of_identity', 'email', 'phone', 'did_authn']
+        #user_workspace_contract = user.username
         checkbox = {key.replace(':', '_') : 'checked' if key in grant.request.scope.split() and key in client.scope.split() else ""  for key in consent_screen_scopes}
 
         # Display consent view to ask for user consent if scope is more than just openid
         return render_template('authorize.html',
-                                user=user,
-                                grant=grant,
-                                **checkbox,
-                                wallet_signature=request.args.get('wallet_signature'),
-                                workspace_contract_to= client_workspace_contract)
+                                #user=user,
+                                #grant=grant,
+                                **checkbox,)
+                                #workspace_contract_to= client_workspace_contract)
 
-    # POST, call from consent screen
-    signature = request.form.get('signature')
-    message = request.form.get('message')
+    # POST, call from consent screen    uthorize.html
+    # a ce jour le wallet retourne un IDtoken {"did" : xx, "data" : xxx, "signature" : xxx}
+    token_dict = { 'did' : request.form.get('did'),
+                    'data' : request.form.get('data'), 
+                    'signature' : request.form.get('signature')
+                    }
+    token = dict_to_b64(token_dict)
+    logging.info('DID IDtoken = %s', token)
+
     if not user and 'username' in request.form:
         username = request.form.get('username')
         user_workspace_contract = ns.get_data_from_username(username, mode)['workspace_contact']
         user = User.query.filter_by(username=user_workspace_contract).first()
+
     if 'reject' in request.form :
         session.clear()
         logging.info('reject')
         return oauth2.authorization.create_authorization_response(grant_user=None,)
+
     # update scopes after user consent
     query_dict = parse_qs(request.query_string.decode("utf-8"))
     my_scope = ""
@@ -313,9 +329,10 @@ def authorize(mode):
         if request.form.get(scope) :
             my_scope = my_scope + scope + " "
     query_dict["scope"] = [my_scope[:-1]]
+
     # we setup a custom Oauth2Request as we have changed the scope in the query_dict
     req = OAuth2Request("POST", request.base_url + "?" + urlencode(query_dict, doseq=True))
-    return oauth2.authorization.create_authorization_response(message=message, signature=signature, grant_user=user, request=req,)
+    return oauth2.authorization.create_authorization_response(token=token, grant_user=user, request=req,)
 
 
 @oauth2.require_oauth('address openid profile resume email birthdate proof_of_identity about resume gender name contact_phone website', 'OR')
@@ -330,8 +347,10 @@ def user_info(mode):
     profile, category = protocol.read_profil(user_workspace_contract, mode, 'full')
     user_info['sub'] = 'did:talao:' + mode.BLOCKCHAIN +':' + user_workspace_contract[2:]
     logging.info('token scope received = %s', current_token.scope)
+
     if 'proof_of_identity' in current_token.scope :
         user_info['proof_of_identity'] = 'Not implemented yet'
+
     if category == 1001 : # person
         if 'profile' in current_token.scope :
             user_info['given_name'] = profile.get('firstname')
@@ -345,10 +364,11 @@ def user_info(mode):
         if 'resume' in current_token.scope :
             print('user wokspace contract dans appel de resume = ', user_workspace_contract)
             user_info['resume'] = get_resume(user_workspace_contract, mode)
+
     if category == 2001 : # company
         logging.warning('OIDC request for company')
+
     # setup response
-    response = Response(json.dumps(user_info), status=200, mimetype='application/json')
-    return response
+    return Response(json.dumps(user_info), status=200, mimetype='application/json')
 
 
