@@ -39,7 +39,9 @@
                                 <canvas id="canvas" width="244" title="Scan with your mobile wallet." style="border:1px solid #000000;" ></canvas>
                             </div>
                             <div class="text-center"><a class="small" href="/api/v1/help?file=oauth_wc_help.html" >Help</a></div>  
-                            <div class="text-center"><a class="small" href="/api/v1/oauth_login_larger" >Try larger QR code !</a></div>  
+                            <div class="text-center"><a class="small" href="/api/v1/oauth_login_larger" >Try larger QR code !</a></div>
+                            <div class="text-center"><a class="small" href="https://talao.co/" >Register</a></div>  
+
                         </div>
                     </div>
                 </div>
@@ -49,7 +51,7 @@
 </div>
 <script src="{{ url_for('static', filename='jquery-3.5.1.slim.min.js') }}"></script>
     <script src="{{ url_for('static', filename='bootstrap.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='wc-talao.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='oidc-talao.min.js') }}"></script>
 
     <script>async function page_onload(){
     let device = ""

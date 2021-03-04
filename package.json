@@ -1,0 +1,24 @@
+{
+  "name": "oidc_did",
+  "version": "1.0.0",
+  "description": "OIDC DID server",
+  "main": "webpack.config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Thierry Thevenet",
+  "license": "MIT",
+  "dependencies": {
+    "@walletconnect/web3-provider": "^1.3.6",
+    "cryptico-js": "^1.1.0",
+    "crypto-js": "^4.0.0",
+    "node-rsa": "^1.1.1",
+    "web3": "^1.3.4"
+  },
+  "devDependencies": {
+    "webpack": "^4.44.2"
+  }
+}

@@ -24,19 +24,16 @@ from authlib.oauth2.rfc6749.errors import (
 )
 from authlib.oidc.core import UserInfo
 from werkzeug.security import gen_salt
-from models import db, User
-from models import OAuth2Client, OAuth2AuthorizationCode, OAuth2Token
 from authlib.jose import jwk
 from Crypto.PublicKey import RSA
 import time
 import datetime
 import os
 
-#from protocol import Document, get_category, ownersToContracts
-#from core import ns, privatekey
 from erc725 import oidc_environment, protocol
+from models import db, User
+from models import OAuth2Client, OAuth2AuthorizationCode, OAuth2Token
 import constante
-import models
 
 # Environment setup
 mychain = os.getenv('MYCHAIN')
@@ -114,8 +111,8 @@ def create_authorization_code(client, grant_user, request):
         user_id=grant_user.id,
         nonce=nonce,
     )
-    models.db.session.add(item)
-    models.db.session.commit()
+    db.session.add(item)
+    db.session.commit()
     return code
 
 class AuthorizationCodeGrant(_AuthorizationCodeGrant):
@@ -197,7 +194,7 @@ class HybridGrant(_OpenIDHybridGrant):
 
 class talao_authorization(AuthorizationServer):
 
- def create_authorization_response(self,message=None, signature=None, request=None, grant_user=None, ): # ajout de wallet signature
+ def create_authorization_response(self,token=None, request=None, grant_user=None, ): # ajout de wallet signature
     print('appel de create authorization response dans oauth2')
     request = self.create_oauth2_request(request)
     try:
@@ -207,8 +204,8 @@ class talao_authorization(AuthorizationServer):
     try:
         redirect_uri = grant.validate_authorization_request()
         status,body,header = grant.create_authorization_response(redirect_uri, grant_user)
-        if signature and message:
-            header = [(header[0][0], header[0][1] + '&signature=' + signature + '&message=' + message)] # ajout
+        if token:
+            header = [(header[0][0], header[0][1] + '&token=' + token)] # ajout
         return self.handle_response(status,body,header)
     except OAuth2Error as error:
         return self.handle_error_response(request, error)
