@@ -1,13 +1,39 @@
 """
-Main script to start web server through Gunicorn
-Arguments of main.py are in gunicornconf.py (global variables) :
-$ gunicorn -c gunicornconf.py  --reload wsgi:app
+DID SIOP Talao implementation
 
-if script is launched without Gunicorn, setup environment variables first :
-$ export MYCHAIN=talaonet
-$ export MYENV=livebox
-$ export AUTHLIB_INSECURE_TRANSPORT=1
-$ python main.py
+Reference :
+https://identity.foundation/did-siop/
+https://openid.net/specs/openid-connect-core-1_0.html#SelfIssued
+
+Main issues :
+
+    1 : w3C did siop request are based an siop token flow (implicit) but france connect flow is based on authorization code flow
+    2 : 
+    3 : we do not use universal resolver to check client signing keys
+
+
+DID-SIOP Request
+
+    openid://?response_type=token
+        &client_id=https%3A%2F%2Frp.example.com%2Fcb
+        &scope=openid%20did_authn
+        &request=jwt
+
+    We do not use JWT, data are given as args parameters
+    &request=jwt is replaced by  &client_did=xxx&state=yyyy&nonce=zzz&signature=sign
+    with sign = eth_sign(jwt['client_did'] + jwt['state'] + jwt['nonce'])
+
+
+
+Test
+
+    Main script to test web server through Gunicorn
+    Arguments of main.py are in gunicornconf.py (global variables) :
+    $ gunicorn -c gunicornconf.py  --reload wsgi:app
+    if script is launched without Gunicorn, setup environment variables first :
+    $ export MYCHAIN=talaonet
+    $ export MYENV=livebox
+    $ export AUTHLIB_INSECURE_TRANSPORT=1 # to be removed for production
 
 """
 import sys
@@ -20,7 +46,7 @@ import logging
 
 import models
 import oauth2
-from routes import web_oauth_did
+from routes import did_siop, server_utilities
 from erc725 import oidc_environment
 
 logging.basicConfig(level=logging.INFO)
@@ -80,28 +106,28 @@ oauth2.config_oauth(app)
 
 # FLASK ROUTES
 
-# Create credentials
-app.add_url_rule('/api/v1', view_func=web_oauth_did.home, methods = ['GET', 'POST'], defaults ={'mode' : mode})
-app.add_url_rule('/api/v1/create_client', view_func=web_oauth_did.create_client, methods = ['GET', 'POST'])
+# Server Management
+app.add_url_rule('/api/v1', view_func=server_utilities.home, methods = ['GET', 'POST'], defaults ={'mode' : mode})
+app.add_url_rule('/api/v1/create_client', view_func=server_utilities.create_client, methods = ['GET', 'POST'])
 
 # Identity Provider
-app.add_url_rule('/api/v1/oauth_login', view_func=web_oauth_did.oauth_login, methods = ['GET', 'POST'], defaults ={'mode' : mode})
-app.add_url_rule('/api/v1/oauth_login_larger', view_func=web_oauth_did.oauth_login_larger, methods = ['GET', 'POST'], defaults ={'mode' : mode})
-app.add_url_rule('/api/v1/oauth_wc_login/', view_func=web_oauth_did.oauth_wc_login, methods = ['GET', 'POST'], defaults ={'mode' : mode})
+app.add_url_rule('/api/v1/oauth_login', view_func=did_siop.oauth_login, methods = ['GET', 'POST'], defaults ={'mode' : mode})
+app.add_url_rule('/api/v1/oauth_login_larger', view_func=did_siop.oauth_login_larger, methods = ['GET', 'POST'], defaults ={'mode' : mode})
+app.add_url_rule('/api/v1/oauth_wc_login/', view_func=did_siop.oauth_wc_login, methods = ['GET', 'POST'], defaults ={'mode' : mode})
 
-app.add_url_rule('/api/v1/oauth_logout', view_func=web_oauth_did.oauth_logout, methods = ['GET', 'POST'])
+app.add_url_rule('/api/v1/oauth_logout', view_func=did_siop.oauth_logout, methods = ['GET', 'POST'])
 #app.add_url_rule('/api/v1/oauth_two_factor', view_func=web_oauth.oauth_two_factor, methods = ['GET', 'POST'], defaults ={'mode' : mode})
 
 # Authorization Server
-app.add_url_rule('/api/v1/authorize', view_func=web_oauth_did.authorize, methods = ['GET', 'POST'], defaults={'mode' : mode})
-app.add_url_rule('/api/v1/oauth/token', view_func=web_oauth_did.issue_token, methods = ['POST'])
-app.add_url_rule('/api/v1/oauth_revoke', view_func=web_oauth_did.revoke_token, methods = ['GET', 'POST'])
+app.add_url_rule('/api/v1/authorize', view_func=did_siop.authorize, methods = ['GET', 'POST'], defaults={'mode' : mode})
+app.add_url_rule('/api/v1/oauth/token', view_func=did_siop.issue_token, methods = ['POST'])
+app.add_url_rule('/api/v1/oauth_revoke', view_func=did_siop.revoke_token, methods = ['GET', 'POST'])
 
 # authorization code flow with user consent screen
-app.add_url_rule('/api/v1/user_info', view_func=web_oauth_did.user_info, methods = ['GET', 'POST'], defaults={'mode' : mode})
+app.add_url_rule('/api/v1/user_info', view_func=did_siop.user_info, methods = ['GET', 'POST'], defaults={'mode' : mode})
 
 # miscallenous
-app.add_url_rule('/api/v1/help', view_func=web_oauth_did.send_help)
+app.add_url_rule('/api/v1/help', view_func=server_utilities.send_help)
 
 # MAIN entry point : Flask API server
 

@@ -146,20 +146,22 @@
     <script src="{{ url_for('static', filename='bootstrap.min.js') }}"></script>
     <script src="{{ url_for('static', filename='oidc-talao.min.js') }}"></script>
 
-<script> async function signuserinfo(){
+<script> 
+
+async function signuserinfo(){
     document.getElementById("id_spinner").innerHTML = '<div class="spinner-border"></div>';
     document.getElementById("id_button").innerHTML = '';
     document.getElementById("id_button_reject").innerHTML = ''
     document.getElementById("id_text").innerHTML = 'Waiting for wallet to access Digital Identity...';
     /*
     In this option we send back the private key encrypted with the rsa key of the client
-    
+
     const result = await window.getAesEncrypted('{{workspace_contract_to}}');
     console.log('result = ', result);
     const message = JSON.stringify({'aesEncrypted' : result[0], 'workspace_contract' : result[1]})
     document.getElementById("id_text").innerHTML = 'Waiting for wallet signature to send data...';
     const signature = await window.sign(message);
-    
+
     In this option we send back did_authn in plain text as an IDtoken
     The token is build by the server
     */
@@ -175,14 +177,14 @@
     window.onEnd();
     document.getElementById("myform").submit();
 }
-</script>
 
-<script> function End() {
+
+function End() {
     window.onEnd();
     window.location.href = "/api/v1/oauth_login";
   }
-  </script>
+
+</script>
 
 </body>
-
 </html>

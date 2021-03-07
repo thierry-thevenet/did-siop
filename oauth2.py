@@ -46,14 +46,14 @@ private_rsa_key = protocol.get_rsa_key(mode.owner_talao, mode)
 JWK = jwk.dumps(private_rsa_key)
 
 # set up 'kid' in the JWK header
-JWK['kid'] = "Talao RSA Key"
+JWK['kid'] = "did:talo:talaonet:c5C1B070b46138AC3079cD9Bce10010d6e1fCD8D#secondary"
 
 JWT_CONFIG = {
     'key':  JWK,
     'alg': 'RS256',
     'iss': 'did:talao:' + mode.BLOCKCHAIN + ':' + mode.workspace_contract_talao[2:],
     'exp': 3600,
-}
+    }
 
 def exists_nonce(nonce, req):
     exists = OAuth2AuthorizationCode.query.filter_by(
@@ -149,34 +149,24 @@ class OpenIDCode(_OpenIDCode):
     def generate_user_info(self, user, scope):
         return generate_user_info(user, scope)
 
-"""
-class ImplicitGrant(_OpenIDImplicitGrant):
+
+class OpenIDImplicitGrant(_OpenIDImplicitGrant):
     def exists_nonce(self, nonce, request):
         return exists_nonce(nonce, request)
 
-    def get_jwt_config(self, grant):
+    def get_audiences(self, request):
+        """Parse `aud` value for id_token, default value is client id. Developers
+        MAY rewrite this method to provide a customized audience value.
+        """
+        return ['did:talao:' + mode.BLOCKCHAIN + ':' + mode.workspace_contract_talao[2:]]
+
+    def get_jwt_config(self):
         return JWT_CONFIG
 
     def generate_user_info(self, user, scope):
         return generate_user_info(user, scope)
-"""
 
-#ajout
-class RefreshTokenGrant(grants.RefreshTokenGrant):
-    def authenticate_refresh_token(self, refresh_token):
-        token = OAuth2Token.query.filter_by(refresh_token=refresh_token).first()
-        if token and token.is_refresh_token_active():
-            return token
 
-    def authenticate_user(self, credential):
-        return User.query.get(credential.user_id)
-
-    def revoke_old_credential(self, credential):
-        credential.revoked = True
-        db.session.add(credential)
-        db.session.commit()
-
-"""
 class HybridGrant(_OpenIDHybridGrant):
     def create_authorization_code(self, client, grant_user, request):
         return create_authorization_code(client, grant_user, request)
@@ -190,12 +180,10 @@ class HybridGrant(_OpenIDHybridGrant):
     def generate_user_info(self, user, scope):
         return generate_user_info(user, scope)
 
-"""
 
 class talao_authorization(AuthorizationServer):
 
- def create_authorization_response(self,token=None, request=None, grant_user=None, ): # ajout de wallet signature
-    print('appel de create authorization response dans oauth2')
+ def create_authorization_response(self,request=None, grant_user=None, ):
     request = self.create_oauth2_request(request)
     try:
         grant = self.get_authorization_grant(request)
@@ -204,8 +192,6 @@ class talao_authorization(AuthorizationServer):
     try:
         redirect_uri = grant.validate_authorization_request()
         status,body,header = grant.create_authorization_response(redirect_uri, grant_user)
-        if token:
-            header = [(header[0][0], header[0][1] + '&token=' + token)] # ajout
         return self.handle_response(status,body,header)
     except OAuth2Error as error:
         return self.handle_error_response(request, error)
@@ -229,9 +215,10 @@ def config_oauth(app):
         OpenIDCode(require_nonce=True),
     ])
     #authorization.register_grant(ImplicitGrant)
-    #authorization.register_grant(HybridGrant)
-    authorization.register_grant(grants.ClientCredentialsGrant)
-    authorization.register_grant(RefreshTokenGrant)
+    authorization.register_grant(OpenIDImplicitGrant)
+    authorization.register_grant(HybridGrant)
+    #authorization.register_grant(grants.ClientCredentialsGrant)
+    #authorization.register_grant(RefreshTokenGrant)
     #authorization.register_grant(PasswordGrant)
 
     # protect resource

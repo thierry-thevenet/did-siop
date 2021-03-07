@@ -36,7 +36,6 @@
                             <div id="connected" hidden></div>
                           </div>
                             <br>
-                            <!-- <span>Your wallet account :</span> -->
                             <p hidden id='id_address_html'>{{wallet_address}}</p> 
                             <br>
                             <p id="id_client"></p> <br>
@@ -60,36 +59,39 @@
   <script src="{{ url_for('static', filename='in_progress_button.js') }}"></script>
 
 
-  <script> function Reject() {
+  <script>
+
+  function Reject() {
     window.onEnd();
     window.location.href = "/api/v1/oauth_wc_login?reject=on";
   }
-  </script>
 
-  <script> function End() {
+  function End() {
     window.onEnd();
     window.location.href = "/api/v1/oauth_login";
   }
-  </script>
 
-
-
-<script>
 async function page_onload(){
   // init web provider
   await window.getAccountAddress();
 
+  // get the request object fromm client. today it is client_id
+  const client_did = '{{client_did}}';
+  const state = '{{state}}';
+  const nonce = '{{nonce}}';
+  const signature = '{{signature}}';
+
   // link to client identity to display
-  const href = "https://talao.co/board/?workspace_contract=" + '0x' + '{{client_did}}'.split(":")[3];
+  const href = "https://talao.co/board/?workspace_contract=" + '0x' + client_did.split(":")[3];
   document.getElementById("id_button").innerHTML = '<div class="spinner-border"></div>'
 
-  /* check client signature here
+  /* check client signature here with local access to Identity
+   We do not use a resolver to check the signing keys
    if client signature is not ok , reject the call
-   if client ok, we pass to oauth_wc_login function on server
+   if client ok, we pass to oauth_wc_login function on server side
   */
-   const message = '{{client_id}}' + '{{nonce}}' + '{{redirect_uri}}' + '{{scope}}' + '{{client_did}}'
-  check = await window.checkSignature('{{client_did}}', '{{signature}}', message);
-  console.log('signature check = ', check);
+  const message = client_did + state + nonce;
+  check = await window.checkSignature(client_did, signature, message);
   if (check){
     document.getElementById("id_client").innerHTML = '<a href=' + href + ' >Website Identity has been verified</a>';
     document.getElementById("id_button").innerHTML = '<button class="btn btn-primary text-white btn-user" id="in_progress_button" type="submit">Next</button>'
@@ -99,6 +101,7 @@ async function page_onload(){
   document.getElementById("id_button").innerHTML = '<button class="btn btn-primary text-white btn-user" onclick="Reject()" name ="reject" type="button">Reject</button>';
   }
 }
+
 </script>
 
 </body>
