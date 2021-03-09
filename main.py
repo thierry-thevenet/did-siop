@@ -5,23 +5,29 @@ Reference :
 https://identity.foundation/did-siop/
 https://openid.net/specs/openid-connect-core-1_0.html#SelfIssued
 
-Main issues :
-
-    1 : w3C did siop request are based an siop token flow (implicit) but france connect flow is based on authorization code flow
-    2 : 
-    3 : we do not use universal resolver to check client signing keys
 
 
-DID-SIOP Request
+    W3C did-siop is based on an oidc siop token flow (similar to an implicit flow), this flow is not acceptable within the current eidas regulation.
+    So we use a standard athorization code flow. Identification is based on a verifiable claim which can be stored in wallet or on chain (Eerc735).The initiql request
+    is extended with client did and signature for identification against user.
 
-    openid://?response_type=token
+    User wallet is either a dapp, a dapp with a mobile connexion (walletconnect), or an mobile app.
+    
+    Flow
+    1 : to log with his identity user scans a QR code on the Client application,he is redirected to the authorization server.
+    2 : the authorization server establishes a connexion with the user wallet. Authentication is done through a DID signature and
+    identification with a credential provided by the wallet. Within ERC735 this credential is encrypted and on chain, it will be downloaded and decryed by the wallet
+    3 : w
+
+
+Request
+
+    openid://?response_type=code
         &client_id=https%3A%2F%2Frp.example.com%2Fcb
         &scope=openid%20did_authn
         &request=jwt
 
-    We do not use JWT, data are given as args parameters
-    &request=jwt is replaced by  &client_did=xxx&state=yyyy&nonce=zzz&signature=sign
-    with sign = eth_sign(jwt['client_did'] + jwt['state'] + jwt['nonce'])
+
 
 
 

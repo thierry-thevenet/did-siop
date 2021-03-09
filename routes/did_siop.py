@@ -1,11 +1,4 @@
-"""
-This module manages a simple did (Self Sovereign Identity) integration to a standard OIDC Server
-wallet are standard mobile crypto wallets compliant with walletconnect protocol
-They are only used to sign for authentication and to sned an encrypted ID token 
-Sign method is eth_sign, no use of JWT as lib have not not been found for ECDSA Ethereum address in JS and Python
-Encryption and eblockchain access are managed client side JS (Dapp) with walletconnect provider
-We use talaonet POA private chain
-"""
+
 import os
 import time
 from flask import request, session, url_for, Response, abort
@@ -18,8 +11,10 @@ from urllib import parse
 from datetime import datetime, timedelta
 import logging
 from eth_account import Account
+from eth_account.messages import encode_defunct
 from eth_keys import keys
 import base64
+import secrets
 
 import constante
 import oauth2, ns, talao_ipfs
@@ -122,8 +117,6 @@ def oauth_login_larger(mode):
     """
     return render_template('login_mobile.html')
 
-
-
 def oauth_wc_login(mode) :
     """
     @app.route('/oauth_wc_login/', methods = ['GET', 'POST'])
@@ -133,7 +126,7 @@ def oauth_wc_login(mode) :
     if request.method == 'GET' :
 
         wallet_address = request.args.get('wallet_address')
-        wallet_name = request.args.get('wallet_address')
+        wallet_name = request.args.get('wallet_name')
         wallet_logo = request.args.get('wallet_logo')
 
         # if the QR code scan has been refused or wallet address cannot be read we reject
@@ -160,21 +153,42 @@ def oauth_wc_login(mode) :
         logging.info("This wallet account is owner of  = %s", workspace_contract)
         did_siop_request = dict(parse.parse_qsl(parse.urlsplit(session['url']).query))
         # confirm.htlm is a dapp which is going to check the client request in regard of its did and signature
-        return render_template('wc_confirm.html',
-								wallet_address=wallet_address,
+        # and provide a user signature to a code sent by the authorization server
+
+        # authorization server message for wallet authentication
+        session['message'] = str(secrets.randbits(64))
+        logging.info('authentication code sent to wallet = %s', session['message'])
+
+        return render_template('did_oidc_confirm.html',
+                                wallet_message=session['message'],
                                 **did_siop_request,
+								wallet_address=wallet_address,
 								wallet_name = wallet_name,
 								wallet_logo= wallet_logo,)
 
     if request.method == 'POST' :
-        # TODO check signature of user
+        # Verify signature of Identity with eth_sign method
+        try :
+            msg = encode_defunct(text= session['message'])
+            signer = Account.recover_message(msg, signature=request.form.get('wallet_signature'))
+        except :
+            logging.error('signature invalid')
+            return redirect(session['url']+'&reject=on')
 
+        logging.info('signer =  %s', signer)
+        if signer != session['wallet_address'] :
+            logging.error('signer is not wallet address, login rejected')
+            return redirect(session['url']+'&reject=on')
+
+        # register user in local base
         user = User.query.filter_by(username=session['workspace_contract']).first()
         if not user:
             user = User(username=workspace_contract)
             db.session.add(user)
             db.session.commit()
         session['id'] = user.id
+
+        # return to authorization server for user consent
         return redirect(session['url'] + '&wallet_address=' + session['wallet_address'])
 
 
@@ -218,21 +232,18 @@ def authorize(mode):
             logging.error('OAuth2Error')
             return jsonify(dict(error.get_body()))
 
-        # configure consent screen : oauth_authorize.html
+        # configure consent screen : authorize.html
         consent_screen_scopes = ['openid', 'address', 'profile', 'about', 'birthdate', 'resume', 'proof_of_identity', 'email', 'phone', 'did_authn']
         checkbox = {key.replace(':', '_') : 'checked' if key in grant.request.scope.split() and key in client.scope.split() else ""  for key in consent_screen_scopes}
-        return render_template('authorize.html', **checkbox,)
+        return render_template('did_oidc_authorize.html', **checkbox,)
 
     # POST, call from consent screen  authorize.html
+
     #if not user and 'username' in request.form:
     #    username = request.form.get('username')
     #    user_workspace_contract = ns.get_data_from_username(username, mode)['workspace_contact']
     #    user = User.query.filter_by(username=user_workspace_contract).first()
 
-    #if 'reject' in request.form :
-    #    session.clear()
-    #    logging.info('reject')
-    #    return oauth2.authorization.create_authorization_response(grant_user=None,)
 
     # update scopes after user consent
     query_dict = parse_qs(request.query_string.decode("utf-8"))
@@ -246,3 +257,39 @@ def authorize(mode):
     req = OAuth2Request("POST", request.base_url + "?" + urlencode(query_dict, doseq=True))
     return oauth2.authorization.create_authorization_response(grant_user=user, request=req,)
 
+
+# endpoint standard OIDC
+#route('/api/v1/user_info')
+@oauth2.require_oauth('address openid profile resume email birthdate proof_of_identity about resume gender name contact_phone website', 'OR')
+def user_info(mode):
+    user_id = current_token.user_id
+    user_workspace_contract = get_user_workspace(user_id,mode)
+    user_info = dict()
+    user_info['sub'] = 'did:talao:' + mode.BLOCKCHAIN +':' + user_workspace_contract[2:]
+     # setup response
+    response = Response(json.dumps(user_info), status=200, mimetype='application/json')
+    return response
+    """
+    profile, category = read_profil(user_workspace_contract, mode, 'full')
+    print('Warning : token scope received = ', current_token.scope)
+    if 'proof_of_identity' in current_token.scope :
+        user_info['proof_of_identity'] = 'Not implemented yet'
+    if category == 1001 : # person
+        if 'profile' in current_token.scope :
+            user_info['given_name'] = profile.get('firstname')
+            user_info['family_name'] = profile.get('lastname')
+            user_info['gender'] = profile.get('gender')
+        for scope in ['email', 'phone', 'birthdate', 'about'] :
+            if scope in current_token.scope :
+                user_info[scope] = profile.get(scope) if profile.get(scope) != 'private' else None
+        if 'address' in current_token.scope :
+            user_info['address'] = profile.get('postal_address') if profile.get('postal_address') != 'private' else None
+        if 'resume' in current_token.scope :
+            print('user wokspace contract dans appel de resume = ', user_workspace_contract)
+            user_info['resume'] = get_resume(user_workspace_contract, mode)
+    if category == 2001 : # company
+        print('Error : OIDC request for company')
+    # setup response
+    response = Response(json.dumps(user_info), status=200, mimetype='application/json')
+    return response
+    """
