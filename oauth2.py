@@ -29,11 +29,15 @@ from Crypto.PublicKey import RSA
 import time
 import datetime
 import os
+import json
+import logging
+logging.basicConfig(level=logging.INFO)
 
 from erc725 import oidc_environment, protocol
 from models import db, User
 from models import OAuth2Client, OAuth2AuthorizationCode, OAuth2Token
 import constante
+import ns
 
 # Environment setup
 mychain = os.getenv('MYCHAIN')
@@ -61,43 +65,18 @@ def exists_nonce(nonce, req):
     ).first()
     return bool(exists)
 
-# for JWT generation only, we use the kyc data 
+# for JWT generation only
 def generate_user_info(user, scope):
     user_workspace_contract = user.username
-    user_info = UserInfo(sub='did:talao:' + mode.BLOCKCHAIN +':' + user_workspace_contract[2:])
-    """
-    category  = protocol.get_category(user_workspace_contract, mode,)
-    if category == 2001 : #  company
-        return user_info
-    # get private KYC
-    contract = mode.w3.eth.contract(user_workspace_contract,abi = constante.workspace_ABI)
-    kyc_list = list()
-    for doc_id in contract.functions.getDocuments().call() :
-        if contract.functions.getDocument(doc_id).call()[0] == 15000 : # KYC private
-            kyc_list.append(doc_id)
-    if kyc_list :
-        kyc = Document('kyc')
-        kyc.relay_get(user_workspace_contract, kyc_list[-1], mode)
-        kyc_dict = kyc.__dict__
-        if 'profile' in scope :
-            user_info['given_name'] = kyc_dict.get('given_name', '')
-            user_info['family_name'] = kyc_dict.get('family_name', '')
-            user_info['gender'] = kyc_dict.get('gender', '')
-        if 'email' in scope :
-            user_info['email']= kyc_dict.get('email', '')
-            user_info['email_verified'] = True if user_info['email'] else False
-        if 'phone' in scope or 'phone_number' in scope :
-            user_info['phone_number']= kyc_dict.get('phone', '')
-            user_info['phone_number_verified'] = True if user_info['phone_number'] else False
-        if 'birthdate' in scope :
-            user_info['birthdate'] = kyc_dict.get('birthdate', '')
-        if 'address' in scope :
-            user_info['address'] = kyc_dict.get('address', '')
-        updated_at = time.mktime(datetime.datetime.strptime(kyc_dict.get('created', 0), "%Y-%m-%d %H:%M:%S").timetuple())
-        user_info['updated_at'] = updated_at
-    """
+    did = 'did:talao:' + mode.BLOCKCHAIN +':' + user_workspace_contract[2:]
+    user_info = UserInfo(sub=did)
+    user_info['credential'] = json.dumps(json.loads(ns.get_vc(did)[0])["did_authn"])
+     # credential is deleted
+    try :
+        ns.del_vc(did)
+    except :
+        logging.error('credential deletion failed')
     return user_info
-
 
 
 def create_authorization_code(client, grant_user, request):
@@ -116,22 +95,34 @@ def create_authorization_code(client, grant_user, request):
     return code
 
 class AuthorizationCodeGrant(_AuthorizationCodeGrant):
-    def create_authorization_code(self, client, grant_user, request):
-        return create_authorization_code(client, grant_user, request)
+    #def create_authorization_code(self, client, grant_user, request):
+    #    return create_authorization_code(client, grant_user, request)
 
-    def parse_authorization_code(self, code, client):
+    def query_authorization_code(self, code, client): # parse
         item = OAuth2AuthorizationCode.query.filter_by(
             code=code, client_id=client.client_id).first()
         if item and not item.is_expired():
             return item
 
-    def delete_authorization_code(self, authorization_code):
+    def delete_authorization_code(self, authorization_code) :
         db.session.delete(authorization_code)
         db.session.commit()
 
     def authenticate_user(self, authorization_code):
         return User.query.get(authorization_code.user_id)
 
+    def save_authorization_code(self, code, request): # ajouté pour remplacer create
+        client = request.client
+        item = OAuth2AuthorizationCode(
+            code=code,
+            client_id=client.client_id,
+            redirect_uri=request.redirect_uri,
+            scope=request.scope,
+            user_id=request.user.id,
+            )
+        db.session.add(item)
+        db.session.commit()
+        return code
 
 class OpenIDCode(_OpenIDCode):
     def exists_nonce(self, nonce, request):
@@ -166,7 +157,7 @@ class OpenIDImplicitGrant(_OpenIDImplicitGrant):
     def generate_user_info(self, user, scope):
         return generate_user_info(user, scope)
 
-
+"""
 class HybridGrant(_OpenIDHybridGrant):
     def create_authorization_code(self, client, grant_user, request):
         return create_authorization_code(client, grant_user, request)
@@ -179,25 +170,9 @@ class HybridGrant(_OpenIDHybridGrant):
 
     def generate_user_info(self, user, scope):
         return generate_user_info(user, scope)
+"""
 
-
-class talao_authorization(AuthorizationServer):
-
- def create_authorization_response(self,request=None, grant_user=None, ):
-    request = self.create_oauth2_request(request)
-    try:
-        grant = self.get_authorization_grant(request)
-    except InvalidGrantError as error:
-        return self.handle_error_response(request, error)
-    try:
-        redirect_uri = grant.validate_authorization_request()
-        status,body,header = grant.create_authorization_response(redirect_uri, grant_user)
-        return self.handle_response(status,body,header)
-    except OAuth2Error as error:
-        return self.handle_error_response(request, error)
-
-#authorization = AuthorizationServer()
-authorization = talao_authorization()
+authorization = AuthorizationServer()
 require_oauth = ResourceProtector()
 
 
@@ -215,8 +190,8 @@ def config_oauth(app):
         OpenIDCode(require_nonce=True),
     ])
     #authorization.register_grant(ImplicitGrant)
-    authorization.register_grant(OpenIDImplicitGrant)
-    authorization.register_grant(HybridGrant)
+    #authorization.register_grant(OpenIDImplicitGrant)
+    #authorization.register_grant(HybridGrant)
     #authorization.register_grant(grants.ClientCredentialsGrant)
     #authorization.register_grant(RefreshTokenGrant)
     #authorization.register_grant(PasswordGrant)

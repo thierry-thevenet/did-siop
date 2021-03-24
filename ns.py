@@ -618,6 +618,33 @@ def get_credentials(username, mode) :
 				 'scope' : metadata['scope'] })
 	return credentials
 
+def add_vc(did, credential) :
+	conn = sqlite3.connect('./../db/talaonet/db.sqlite')
+	c = conn.cursor()
+	data = {'did' : did, 'credential' : credential}
+	c.execute("INSERT INTO vc VALUES (:did, :credential )", data)
+	conn.commit()
+	conn.close()
+	return
+
+def get_vc(did) :
+	conn = sqlite3.connect('./../db/talaonet/db.sqlite')
+	c = conn.cursor()
+	data = {'did' : did}
+	c.execute("SELECT credential FROM vc WHERE did = :did", data)
+	select = c.fetchone()
+	conn.close()
+	return select
+
+def del_vc(did) :
+	conn = sqlite3.connect('./../db/talaonet/db.sqlite')
+	c = conn.cursor()
+	data = {'did' : did}
+	c.execute("DELETE FROM vc WHERE did = :did", data)
+	conn.commit()
+	conn.close()
+	return 
+
 """
 
 if __name__ == '__main__':

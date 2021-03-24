@@ -73,7 +73,7 @@ mode = oidc_environment.currentMode(mychain,myenv)
 logging.info('end of init environment')
 
 # OIDC DID server Release
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 # Framework Flask and Session setup
 app = Flask(__name__)
@@ -113,7 +113,7 @@ oauth2.config_oauth(app)
 # FLASK ROUTES
 
 # Server Management
-app.add_url_rule('/api/v1', view_func=server_utilities.home, methods = ['GET', 'POST'], defaults ={'mode' : mode})
+app.add_url_rule('/api/v1', view_func=server_utilities.home, methods = ['GET', 'POST'])
 app.add_url_rule('/api/v1/create_client', view_func=server_utilities.create_client, methods = ['GET', 'POST'])
 
 # Identity Provider
@@ -144,3 +144,5 @@ if __name__ == '__main__':
     logging.info('flask serveur on production now')
 
     app.run(host = mode.flaskserver, port= mode.port, debug = mode.test)
+
+

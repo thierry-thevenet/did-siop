@@ -18,10 +18,13 @@
                                     <br><br>
                                     <div id="id_text" class="text-center" >Allow this company to access your Digital Identity ?.</div>
                                     <form id="myform" action="" method="POST">
-                                        <input id="id_data" value="" name="data" hidden type="text" >
+
+                                        <input id="id_credential" value="" name="credential" hidden type="text" >
                                         <input id="id_signature" value="" name="signature" hidden type="text" >
                                         <input id="id_did" value="" name="did" hidden type="text" >
+
                                         <div id='connected' hidden></div>
+
                                         <div class="form-group">
                                             {% if openid == 'checked' %}
                                             <div class="form-inline custom-control-inline">
@@ -122,17 +125,17 @@
                                         <br>
                                         <div id="id_spinner" class="text-center"></div>
 
-                                        <div class="form-row">
-                                            <div class="col-4 col-xl-3">
-                                                <div  id="id_button"  class="form-group"><buttontitle="" onclick="signuserinfo()" class="btn btn-primary text-white btn-user" type="button">Allow</button></div>
+                                        <div class="form-row text-center">
+                                            <div class="col">
+                                                <div  id="id_button"  class="form-group"><button title="" onclick="signuserinfo()" class="btn btn-primary text-white btn-user" type="button">Allow</button></div>
                                             </div>
-                                            <div class="col-4 col-xl-3">
+                                            <div class="col">
                                                 <div id="id_button_reject"  class="form-group"><button class="btn btn-primary text-white btn-user" onclick="window.onEnd()" name ="reject" type="submit">Reject</button></div>
                                             </div>
                                         </div>
                                     </form>
                                 </div>
-                                <div class="text-center"><a class="small" onclick="End()" href="#" >Change account</a></div>
+                                <div class="text-center"><a class="small" onclick="End()" href="#" >Change DID</a></div>
                                 <div class="text-center"><a class="small" onclick="Reject()" href="#" >Back to website</a></div>
 
                                 <br>
@@ -148,25 +151,28 @@
     <script src="{{ url_for('static', filename='bootstrap.min.js') }}"></script>
     <script src="{{ url_for('static', filename='oidc-talao.min.js') }}"></script>
 
-<script> 
+<script>
 
 async function signuserinfo(){
     document.getElementById("id_spinner").innerHTML = '<div class="spinner-border"></div>';
     document.getElementById("id_button").innerHTML = '';
     document.getElementById("id_button_reject").innerHTML = ''
-    document.getElementById("id_text").innerHTML = 'Waiting for wallet to access your Identity credential...';
+    document.getElementById("id_text").innerHTML = 'Waiting for your wallet to access the credential repository...';
     /*
-    we send back did_authn in plain text
-    The token is build by the server
+    wallet send back did_authn in plain text
+    The ID token is build by the server
     */
-    const IDtoken = await getDidAuthn();
+    const credential = await getDidAuthn();
+
     document.getElementById("id_text").innerHTML = 'Waiting for wallet signature to send data to website...';
     // signature of the did authn only
-    const signature = await window.sign(IDtoken['data']);
-    // pass all data server through the form
-    document.getElementById("id_data").value = IDtoken['data'];
-    document.getElementById("id_did").value = IDtoken['did'];
+    const signature = await window.sign(credential['data']);
+
+    // pass all data to server through the form
+    document.getElementById("id_credential").value = credential['data'];
+    document.getElementById("id_did").value = credential['did'];
     document.getElementById("id_signature").value = signature;
+
     // smartphone session is over
     window.onEnd();
     document.getElementById("myform").submit();

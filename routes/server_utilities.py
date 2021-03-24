@@ -8,7 +8,7 @@ We use talaonet POA private chain
 """
 import os
 import time
-from flask import request, session, url_for, Response, abort
+from flask import request, session, url_for, Response, abort, flash
 from flask import render_template, redirect, jsonify
 from werkzeug.security import gen_salt
 from authlib.integrations.flask_oauth2 import current_token, client_authenticated
@@ -66,53 +66,30 @@ def send_help():
     filename = request.args['file']
     return render_template(filename)
 
-def home(mode):
+def home():
     """
     @route('/api/v1', methods=('GET', 'POST'))
-    This function is called from the Talao identity to create  client API credentials for authorization server
     """
-    check_login()
-    if request.method == 'POST':
-        username = request.form.get('username')
-        workspace_contract = ns.get_data_from_username(username, mode).get('workspace_contract')
-        user = User.query.filter_by(username=workspace_contract).first()
-        if not user:
-            user = User(username=workspace_contract)
-            db.session.add(user)
-            db.session.commit()
-        session['id'] = user.id
-        # if user is not just to log in, but need to head back to the auth page, then go for it
-        next_page = request.args.get('next')
-        if next_page:
-            return redirect(next_page)
-        return redirect('/api/v1')
-    user = current_user()
-    if user:
-        clients = OAuth2Client.query.filter_by(user_id=user.id).all()
-    else:
-        clients = []
-    return render_template('home.html', user=user, clients=clients)
-
-
-def create_client():
-    """
-    @route('/api/v1/create_client', methods=('GET', 'POST'))
-    This function is called from the Talao website to create client API credentials for authorization server
-    as OIDC requiremets
-    """
-    check_login()
-    user = current_user()
-    if not user:
-        return redirect('/api/v1')
     if request.method == 'GET':
+        return render_template('home.html')
+
+    if request.form['password'] != "123456" :
+        print('ici')
+        flash('wrong password', 'danger')
+        return redirect ('/api/v1')
+    return redirect('/api/v1/create_client')
+
+def create_client() :
+    if request.method == 'GET' :
         return render_template('create_client.html')
+
     client_id = gen_salt(24)
     client_id_issued_at = int(time.time())
     client = OAuth2Client(
         client_id=client_id,
         client_id_issued_at=client_id_issued_at,
-        user_id=user.id,
-    )
+        user_id="",
+        )
     form = request.form
     client_metadata = {
         "client_name": form["client_name"],

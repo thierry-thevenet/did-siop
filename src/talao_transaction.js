@@ -137,6 +137,7 @@ export  async function did_authn(provider,web3){
     const contract = new web3.eth.Contract(workspace_contract_abi, workspace_contract);
     // look for the list of ERC725 Claims with topic = did auth
     const claim_list = await contract.methods.getClaimIdsByTopic('100105100095097117116104110').call();
+    console.log('claim list = ', claim_list)
     // look for the last ERC725 claim of the list
     const claim = await contract.methods.getClaim(claim_list.slice(-1)[0]).call();
     // download cipher text from IPFS data of the claim

@@ -21,6 +21,7 @@ import oauth2, ns, talao_ipfs
 from models import db, User, OAuth2Client
 from erc725 import protocol
 
+import logging
 logging.basicConfig(level=logging.INFO)
 
 def dict_to_b64(mydict) :
@@ -143,42 +144,33 @@ def oauth_wc_login(mode) :
         wallet_address = mode.w3.toChecksumAddress(wallet_address)
         session['wallet_address'] = wallet_address
 
-        # check if wallet account is an owner (we rejects alias wallet used by talao.co)
+        # check if wallet account is an owner or alias
         workspace_contract = protocol.ownersToContracts(wallet_address, mode)
         if not workspace_contract or workspace_contract == '0x0000000000000000000000000000000000000000' :
-            logging.warning('This wallet account is not an Identity owner')
-            return render_template('wc_reject.html', wallet_address=wallet_address)
+            # This wallet address is not an Identity owner, lets check if it is an alias (mode workspace = wallet used only for login)
+            wallet_username = ns.get_username_from_wallet(wallet_address, mode)
+            if not wallet_username :
+                # This wallet addresss is not an alias, lest rejest and propose a new registration
+                logging.warning('This wallet account is not an Identity owner')
+                return render_template('wc_reject.html', wallet_address=wallet_address)
+            else :
+                logging.info('This wallet is an Alias')
+                # This wallet is an alias, we look for the workspace_contract attached
+                workspace_contract = ns.get_data_from_username(wallet_username, mode)['workspace_contract']
 
         session['workspace_contract'] = workspace_contract
         logging.info("This wallet account is owner of  = %s", workspace_contract)
-        did_siop_request = dict(parse.parse_qsl(parse.urlsplit(session['url']).query))
+        client_request = dict(parse.parse_qsl(parse.urlsplit(session['url']).query))
         # confirm.htlm is a dapp which is going to check the client request in regard of its did and signature
         # and provide a user signature to a code sent by the authorization server
 
-        # authorization server message for wallet authentication
-        session['message'] = str(secrets.randbits(64))
-        logging.info('authentication code sent to wallet = %s', session['message'])
-
         return render_template('did_oidc_confirm.html',
-                                wallet_message=session['message'],
-                                **did_siop_request,
+                                **client_request,
 								wallet_address=wallet_address,
 								wallet_name = wallet_name,
 								wallet_logo= wallet_logo,)
 
     if request.method == 'POST' :
-        # Verify signature of Identity with eth_sign method
-        try :
-            msg = encode_defunct(text= session['message'])
-            signer = Account.recover_message(msg, signature=request.form.get('wallet_signature'))
-        except :
-            logging.error('signature invalid')
-            return redirect(session['url']+'&reject=on')
-
-        logging.info('signer =  %s', signer)
-        if signer != session['wallet_address'] :
-            logging.error('signer is not wallet address, login rejected')
-            return redirect(session['url']+'&reject=on')
 
         # register user in local base
         user = User.query.filter_by(username=session['workspace_contract']).first()
@@ -190,7 +182,6 @@ def oauth_wc_login(mode) :
 
         # return to authorization server for user consent
         return redirect(session['url'] + '&wallet_address=' + session['wallet_address'])
-
 
 
 #@route('/oauth/revoke', methods=['POST'])
@@ -237,13 +228,29 @@ def authorize(mode):
         checkbox = {key.replace(':', '_') : 'checked' if key in grant.request.scope.split() and key in client.scope.split() else ""  for key in consent_screen_scopes}
         return render_template('did_oidc_authorize.html', **checkbox,)
 
-    # POST, call from consent screen  authorize.html
+    # POST, call from consent view  authorize.html
 
-    #if not user and 'username' in request.form:
-    #    username = request.form.get('username')
-    #    user_workspace_contract = ns.get_data_from_username(username, mode)['workspace_contact']
-    #    user = User.query.filter_by(username=user_workspace_contract).first()
+    # get credential from wallet
+    credential = request.form['credential']
+    did = request.form['did']
 
+    # Verify signature of Identity with eth_sign method
+    try :
+        msg = encode_defunct(text= credential)
+        signer = Account.recover_message(msg, signature=request.form['signature'])
+    except :
+        logging.error('signature invalid')
+        return oauth2.authorization.create_authorization_response(grant_user=None)
+
+    logging.info('signer =  %s', signer)
+    if signer != protocol.contractsToOwners('0x' + did.split(':')[3], mode) :
+        logging.error('signer is not wallet address, login rejected')
+        return oauth2.authorization.create_authorization_response(grant_user=None)
+
+    try :
+        ns.add_vc(did, credential)
+    except :
+        logging.error('database locked, credential is not stored')
 
     # update scopes after user consent
     query_dict = parse_qs(request.query_string.decode("utf-8"))
@@ -253,9 +260,11 @@ def authorize(mode):
             my_scope = my_scope + scope + " "
     query_dict["scope"] = [my_scope[:-1]]
 
-    # we setup a custom Oauth2Request as we have changed the scope in the query_dict
+    # create a Oauth2Request with the updated scope in the query_dict
     req = OAuth2Request("POST", request.base_url + "?" + urlencode(query_dict, doseq=True))
-    return oauth2.authorization.create_authorization_response(grant_user=user, request=req,)
+
+    # send response
+    return oauth2.authorization.create_authorization_response(grant_user=user, request=req)
 
 
 # endpoint standard OIDC
@@ -265,31 +274,15 @@ def user_info(mode):
     user_id = current_token.user_id
     user_workspace_contract = get_user_workspace(user_id,mode)
     user_info = dict()
-    user_info['sub'] = 'did:talao:' + mode.BLOCKCHAIN +':' + user_workspace_contract[2:]
-     # setup response
-    response = Response(json.dumps(user_info), status=200, mimetype='application/json')
-    return response
-    """
-    profile, category = read_profil(user_workspace_contract, mode, 'full')
-    print('Warning : token scope received = ', current_token.scope)
-    if 'proof_of_identity' in current_token.scope :
-        user_info['proof_of_identity'] = 'Not implemented yet'
-    if category == 1001 : # person
-        if 'profile' in current_token.scope :
-            user_info['given_name'] = profile.get('firstname')
-            user_info['family_name'] = profile.get('lastname')
-            user_info['gender'] = profile.get('gender')
-        for scope in ['email', 'phone', 'birthdate', 'about'] :
-            if scope in current_token.scope :
-                user_info[scope] = profile.get(scope) if profile.get(scope) != 'private' else None
-        if 'address' in current_token.scope :
-            user_info['address'] = profile.get('postal_address') if profile.get('postal_address') != 'private' else None
-        if 'resume' in current_token.scope :
-            print('user wokspace contract dans appel de resume = ', user_workspace_contract)
-            user_info['resume'] = get_resume(user_workspace_contract, mode)
-    if category == 2001 : # company
-        print('Error : OIDC request for company')
+    did = 'did:talao:' + mode.BLOCKCHAIN +':' + user_workspace_contract[2:]
+    user_info['sub'] = did
+    user_info['credential'] = json.dumps(json.loads(ns.get_vc(did)[0])["did_authn"])
+    # credential is deleted
+    try :
+        ns.del_vc(user_info['sub'])
+    except :
+        logging.error('credential deletion failed')
     # setup response
     response = Response(json.dumps(user_info), status=200, mimetype='application/json')
     return response
-    """
+
